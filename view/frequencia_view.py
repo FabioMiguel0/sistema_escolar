@@ -1,53 +1,65 @@
 import flet as ft
-from services.aluno_service import get_all
-from services.frequencia_service import registrar, listar
-import datetime
+from services.turma_service import list_turmas, list_alunos_by_turma
+from services.frequencia_service import set_presenca, get_presencas_by_turma_date
 
 
 def FrequenciaView(page: ft.Page):
-    alunos = get_all()
-    aluno_options = [ft.dropdown.Option(str(a["id"]), text=a["nome"]) for a in alunos]
-    aluno_dd = ft.Dropdown(
-        label="Aluno",
-        options=aluno_options,
-        value=aluno_options[0].value if aluno_options else None,
+    page.auto_scroll = True
+    title = ft.Text("Frequência", size=18, weight="bold")
+    turma_dd = ft.Dropdown(
+        label="Turma",
+        options=[ft.dropdown.Option("", text="-- selecionar --")]
+        + [ft.dropdown.Option(str(t["id"]), text=t["nome"]) for t in list_turmas()],
     )
-    data_field = ft.DatePicker(value=datetime.date.today())
-    presente_cb = ft.Checkbox(label="Presente", value=True)
-    list_view = ft.ListView(expand=True, spacing=6, padding=6)
+    date_field = ft.TextField(label="Data (YYYY-MM-DD)", width=160)
+    lista = ft.Column()
+    save_btn = ft.ElevatedButton("Salvar Presenças")
 
-    def load():
-        list_view.controls.clear()
-        for f in listar(aluno_id=int(aluno_dd.value) if aluno_dd.value else None):
-            list_view.controls.append(
-                ft.Row(
-                    [
-                        ft.Text(f["data"]),
-                        ft.Text("Presente" if f["presente"] else "Faltou"),
-                    ]
-                )
-            )
+    pres_map = {}  # aluno_id -> bool
+
+    def on_turma_change(e):
+        lista.controls.clear()
+        if not turma_dd.value:
+            page.update()
+            return
+        alunos = list_alunos_by_turma(int(turma_dd.value))
+        for a in alunos:
+            aid = a["id"]
+            chk = ft.Checkbox(label=a.get("nome") or "", value=False)
+
+            def make_cb(aid_local, chk_local):
+                def cb(e):
+                    pres_map[aid_local] = chk_local.value
+
+                return cb
+
+            chk.on_change = make_cb(aid, chk)
+            lista.controls.append(chk)
         page.update()
 
-    def on_reg(e):
-        if not aluno_dd.value:
+    def on_save(e):
+        if not turma_dd.value or not date_field.value:
+            page.snack_bar = ft.SnackBar(
+                ft.Text("Selecione turma e data")
+            )
+            page.snack_bar.open = True
+            page.update()
             return
-        registrar(int(aluno_dd.value), str(data_field.value), presente_cb.value)
-        load()
+        for aid, presente in pres_map.items():
+            set_presenca(int(turma_dd.value), aid, date_field.value, bool(presente))
+        page.snack_bar = ft.SnackBar(ft.Text("Presenças registadas"))
+        page.snack_bar.open = True
+        page.update()
 
-    reg_btn = ft.ElevatedButton("Registrar", on_click=on_reg)
-    container = ft.Container(
+    turma_dd.on_change = on_turma_change
+    save_btn.on_click = on_save
+
+    return ft.Container(
         content=ft.Column(
-            [
-                ft.Text("Frequência", size=18),
-                ft.Row([aluno_dd, data_field, presente_cb, reg_btn]),
-                ft.Divider(),
-                list_view,
-            ]
+            [title, ft.Divider(), ft.Row([turma_dd, date_field, save_btn]), ft.Divider(), lista]
         ),
         expand=True,
+        padding=12,
     )
-    load()
-    return container
 
 

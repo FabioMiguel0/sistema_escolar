@@ -54,16 +54,45 @@ def registrar_usuario(nome, email, senha, tipo="aluno"):
 # Itens de menu por papel
 # ========================
 def menu_for_role(role: str):
-    # retorna lista de rotas permitidas (pode ser usado pela UI mais tarde)
-    menus = {
-        "admin": ["dashboard", "professores", "turmas", "disciplinas", "alunos", "documentos", "comunicados", "calendario"],
-        "secretaria": ["dashboard", "alunos", "turmas", "documentos", "comunicados", "calendario", "disciplinas"],
-        "professor": ["dashboard", "frequencia", "notas", "comunicados"],
-        "aluno": ["dashboard", "alunos", "notas", "comunicados", "calendario"],
-        "responsavel": ["dashboard", "comunicados", "calendario"],
-        "suporte": ["dashboard"],
+    """
+    Retorna lista de items do menu para o role solicitado.
+    Cada item é uma tupla (route, label). A UI/Shell deve adaptar-se a esta estrutura.
+    """
+    role = (role or "").lower()
+    # assegura que professores vejam 'documentos'
+    menu_map = {
+        "admin": [
+            ("dashboard", "Dashboard"),
+            ("usuarios", "Usuários"),
+            ("professores", "Professores"),
+            ("disciplinas", "Disciplinas"),
+            ("turmas", "Turmas"),
+            ("alunos", "Alunos"),
+            ("documentos", "Documentos"),
+            ("comunicados", "Comunicados"),
+            ("calendario", "Calendário"),
+            ("frequencia", "Frequência"),
+            ("notas", "Notas"),
+        ],
+        "professor": [
+            ("dashboard", "Dashboard"),
+            ("minhas_turmas", "Minhas Turmas"),
+            ("horario", "Horário"),
+            ("minhas_disciplinas", "Disciplinas"),
+            ("frequencia", "Frequência"),
+            ("notas", "Notas"),
+            ("comunicados", "Comunicados"),
+            ("documentos", "Documentos"),  # ADICIONADO
+        ],
+        "aluno": [
+            ("perfil", "Perfil"),
+            ("desempenho", "Desempenho"),
+            ("boletim", "Boletim"),
+            ("horario", "Horário"),
+        ],
+        # ... outros papéis ...
     }
-    return menus.get(role, ["dashboard"])
+    return menu_map.get(role, menu_map.get("aluno"))
 
 def authenticate(username: str, password: str, role: str = None):
     # modo dev: aceita qualquer credencial (retorna dict com id/role)
