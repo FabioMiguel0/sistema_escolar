@@ -166,13 +166,14 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "8550"))
-    # se estamos em produção (PORT definido pelo ambiente), escutamos em 0.0.0.0
-    # se estamos local (sem PORT setado), usamos 127.0.0.1 para que o browser possa abrir o URL
+    # se estamos em produção (PORT definida pelo ambiente) escutamos em 0.0.0.0
+    # se for execução local (sem PORT definida) usamos 127.0.0.1 para que o browser local abra corretamente
     if "PORT" in os.environ:
         host = "0.0.0.0"
+        url_host = "0.0.0.0"
     else:
         host = "127.0.0.1"
+        url_host = "localhost"
 
-    url_host = "localhost" if host == "127.0.0.1" else "0.0.0.0"
     print(f"[START] listening on {host}:{port} — open http://{url_host}:{port} in your browser")
     ft.app(target=main, view=ft.WEB_BROWSER, host=host, port=port)
