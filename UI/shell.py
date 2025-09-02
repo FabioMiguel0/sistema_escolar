@@ -10,46 +10,45 @@ class Shell:
         self.on_route_change = on_route_change
         self.content_builder = content_builder
 
-        # estado UI responsiva
-        self._menu_open = False
-
-        # reconstrói a UI quando a janela for redimensionada
-        def _on_resize(e):
-            if callable(self.on_route_change):
-                # força rebuild chamando a função de rota actual
-                self.on_route_change(self.current_route)
-        # ligar handler (main.go irá rebuild via on_route_change)
+        self._drawer_open = False
+        # reconstrói quando redimensiona para adaptar layout
         try:
+            def _on_resize(e):
+                if callable(self.on_route_change):
+                    self.on_route_change(self.current_route)
             self.page.on_resize = _on_resize
         except Exception:
             pass
 
     def _on_route_click(self, route: str):
-        # fecha menu em mobile ao navegar
-        self._menu_open = False
+        self._drawer_open = False
         if callable(self.on_route_change):
             self.on_route_change(route)
 
     def _build_nav_items(self):
-        items = []
+        controls = []
         for route, label in menu_for_role(self.role):
-            items.append(
-                ft.Container(
-                    content=ft.TextButton(label, on_click=lambda e, r=route: self._on_route_click(r)),
-                    padding=ft.padding.only(top=4, bottom=4)
+            controls.append(
+                ft.ListTile(
+                    title=ft.Text(label),
+                    on_click=lambda e, r=route: self._on_route_click(r),
+                    content_padding=ft.padding.symmetric(vertical=6, horizontal=8)
                 )
             )
-        # separador e logout
-        items.append(ft.Divider())
-        items.append(ft.Container(content=ft.TextButton("Sair / Logout", on_click=lambda e: self._on_route_click("logout")), padding=ft.padding.only(top=4, bottom=4)))
-        return items
+        controls.append(ft.Divider())
+        controls.append(
+            ft.ListTile(
+                title=ft.Text("Sair / Logout"),
+                on_click=lambda e: self._on_route_click("logout"),
+                content_padding=ft.padding.symmetric(vertical=6, horizontal=8)
+            )
+        )
+        return controls
 
-    def _get_window_width(self):
-        # tenta várias propriedades para compatibilidade
+    def _get_width(self):
         try:
-            w = getattr(self.page, "window_width", None)
-            if w:
-                return w
+            if hasattr(self.page, "window_width") and self.page.window_width:
+                return self.page.window_width
             if hasattr(self.page, "client_size") and getattr(self.page.client_size, "width", None):
                 return self.page.client_size.width
         except Exception:
@@ -57,23 +56,23 @@ class Shell:
         return 1000
 
     def build(self):
-        # constrói o conteúdo principal usando content_builder
+        # tenta construir o conteúdo central
         try:
             content_control = self.content_builder() if callable(self.content_builder) else self.content_builder
         except Exception as ex:
-            content_control = ft.Text(f"Erro ao construir conteúdo: {ex}")
+            content_control = ft.Container(content=ft.Text(f"Erro ao construir conteúdo: {ex}"), padding=12)
 
-        # largura actual do ecrã
-        w = self._get_window_width()
-        narrow = w < 900    # breakpoint: mobile/tablet
+        w = self._get_width()
+        mobile = w < 600
+        tablet = 600 <= w < 900
+        desktop = w >= 900
 
-        # se estivermos na tela de login, não mostrar a barra lateral — centrar o conteúdo
+        # login centra-se sempre
         if self.current_route == "login":
-            # calcula width responsivo para o formulário de login
-            login_w = int(min(560, max(320, w * 0.8)))
+            max_w = 560 if desktop else (460 if tablet else 340)
             centered = ft.Column(
                 [
-                    ft.Container(content=content_control, width=login_w)
+                    ft.Container(content=content_control, width=max_w)
                 ],
                 alignment="center",
                 horizontal_alignment="center",
@@ -81,66 +80,79 @@ class Shell:
             )
             return ft.View("/", controls=[centered])
 
-        # navegação (lista de botões)
+        # side nav container (para desktop/tablet)
         nav_items = self._build_nav_items()
-        nav_column = ft.Column(
+        nav_header = ft.Column(
             [
-                ft.Row([ft.Icon(ft.Icons.SCHOOL), ft.Text("Sistema Escolar", weight="bold")], alignment="start"),
+                ft.Row([ft.Icon(ft.Icons.SCHOOL, color=ft.colors.PRIMARY), ft.Text("Sistema Escolar", weight="bold")], alignment="start"),
                 ft.Text(f"Olá, {self.username}", size=12),
-                ft.Divider(),
-            ] + nav_items,
-            spacing=6,
-            tight=True,
+                ft.Divider()
+            ],
+            tight=True
         )
 
-        # layout para ecrãs largos: sidebar fixa + conteúdo expansível
-        if not narrow:
-            nav = ft.Container(content=nav_column, width=240, padding=12)
-            content_view = ft.Container(expand=True, padding=16, content=content_control)
+        # Desktop: fixed sidebar + content
+        if desktop:
+            sidebar = ft.Container(
+                content=ft.Column([nav_header] + nav_items, spacing=6),
+                width=260,
+                padding=12,
+                bgcolor=ft.colors.WHITE,
+                border_radius=0
+            )
+            content_view = ft.Container(content=content_control, expand=True, padding=20)
             view = ft.View(
                 "/",
                 controls=[
-                    ft.Row(
-                        [
-                            nav,
-                            ft.VerticalDivider(width=1, thickness=1),
-                            content_view,
-                        ],
-                        expand=True,
-                    )
+                    ft.Row([sidebar, ft.VerticalDivider(width=1, thickness=1), content_view], expand=True)
                 ],
             )
             return view
 
-        # layout para ecrãs estreitos: top bar + opcional menu expansível
-        # construir AppBar (simples)
-        menu_btn = ft.IconButton(ft.icons.MENU, on_click=self._toggle_menu)
-        title = ft.Text("Sistema Escolar", weight="bold")
-        top_bar = ft.Row([menu_btn, title], alignment="start")
+        # Tablet: narrow sidebar + content (uses smaller sidebar)
+        if tablet:
+            sidebar = ft.Container(
+                content=ft.Column([nav_header] + nav_items, spacing=6),
+                width=200,
+                padding=10,
+            )
+            content_view = ft.Container(content=content_control, expand=True, padding=16)
+            view = ft.View(
+                "/",
+                controls=[
+                    ft.Row([sidebar, ft.VerticalDivider(width=1, thickness=1), content_view], expand=True)
+                ],
+            )
+            return view
 
-        # menu móvel: mostrado acima do conteúdo quando self._menu_open = True
-        mobile_menu = ft.Column(nav_items, visible=self._menu_open, spacing=0, scroll="auto")
+        # Mobile: top AppBar + collapsible drawer (menu)
+        # AppBar
+        def _toggle(e=None):
+            self._drawer_open = not self._drawer_open
+            if callable(self.on_route_change):
+                self.on_route_change(self.current_route)
 
-        content_view = ft.Container(expand=True, padding=12, content=content_control)
+        menu_btn = ft.IconButton(icon=ft.icons.MENU, on_click=_toggle)
+        title = ft.Text("Sistema Escolar", weight="bold", size=16)
+
+        appbar = ft.Container(
+            content=ft.Row([menu_btn, title], alignment="start"),
+            padding=ft.padding.symmetric(horizontal=8, vertical=6),
+            bgcolor=ft.colors.WHITE
+        )
+
+        drawer = ft.Container(
+            content=ft.Column([nav_header] + nav_items, spacing=4),
+            visible=self._drawer_open,
+            padding=12,
+            bgcolor=ft.colors.WHITE
+        )
+
+        content_view = ft.Container(content=content_control, expand=True, padding=12)
         view = ft.View(
             "/",
             controls=[
-                ft.Column(
-                    [
-                        top_bar,
-                        ft.Divider(),
-                        mobile_menu,
-                        content_view,
-                    ],
-                    spacing=8,
-                    expand=True,
-                )
+                ft.Column([appbar, ft.Divider(), drawer, content_view], expand=True)
             ],
         )
         return view
-
-    def _toggle_menu(self, e=None):
-        # alterna menu e força rebuild via on_route_change para refletir mudança
-        self._menu_open = not self._menu_open
-        if callable(self.on_route_change):
-            self.on_route_change(self.current_route)
