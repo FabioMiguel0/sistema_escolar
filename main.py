@@ -48,18 +48,16 @@ def main(page: ft.Page):
     permissions = {
         "admin": {"dashboard", "usuarios", "professores", "disciplinas", "turmas", "alunos", "documentos", "comunicados", "calendario", "frequencia", "notas"},
         "secretaria": {"dashboard", "alunos", "turmas", "documentos", "comunicados", "calendario", "disciplinas"},
-        "professor": {"dashboard", "frequencia", "notas", "comunicados", "minhas_turmas", "horario", "minhas_disciplinas", "documentos"},  # ADICIONADO 'documentos'
-        # aluno: agora tem rota "perfil" que agrega tudo (mantive também as rotas separadas)
+        "professor": {"dashboard", "frequencia", "notas", "comunicados", "minhas_turmas", "horario", "minhas_disciplinas", "documentos"},
         "aluno": {"perfil", "desempenho", "boletim", "horario"},
         "responsavel": {"dashboard", "comunicados", "calendario"},
         "suporte": {"dashboard"},
     }
 
-    # mantemos um shell reconstruível que recebe current_route e on_route_change
     shell = None
 
     def build_shell(page, state, build_content):
-        global shell
+        nonlocal shell
         shell = Shell(
             page=page,
             username=state.get("user") or "Usuário",
@@ -71,30 +69,23 @@ def main(page: ft.Page):
         return shell.build()
 
     def build_content():
-        # retorna um control (container) conforme state["route"]
         r = state.get("route", "dashboard")
         role = state.get("role")
         print(f"[BUILD_CONTENT] route={r} role={role}")
         try:
-            # página de login (quando não autenticado ou após logout)
             if r == "login":
-                # LoginView deve aceitar o parâmetro 'go' para notificar main.go quando o login for feito.
                 return LoginView(page, go=go)
-            # opcional: rota 'home' mapeada para dashboard
             if r == "home":
                 r = "dashboard"
                 state["route"] = r
                 role = state.get("role")
-            # resto das rotas continua abaixo
             if r == "dashboard":
                 return DashboardView(page, role=role, username=state.get("user"), go=go)
-            # se aluno clicou em "notas" (menu antigo) redireciona para perfil
             if r == "notas" and role == "aluno":
                 return ProfileView(page, aluno_id=state.get("user_id"))
             if r == "perfil":
                 return ProfileView(page, aluno_id=state.get("user_id"))
             if r == "usuarios":
-                # passa o usuário logado para que ele não possa rebaixar a si mesmo
                 return UsersView(page, current_user=state.get("user"))
             if r == "alunos":
                 return AlunoView(page, role=role, current_user_id=state.get("user_id"))
@@ -119,12 +110,11 @@ def main(page: ft.Page):
             if r == "frequencia":
                 return FrequenciaView(page)
             if r == "comunicados":
-                return ComunicadoView(page)
+                return ComunicadoView(page, user=state.get("user"))
             if r == "documentos":
                 return DocumentoView(page, user=state.get("user"), role=state.get("role"), user_id=state.get("user_id"))
             if r == "calendario":
                 return CalendarioView(page)
-            # fallback
             return ft.Container(content=ft.Text(f"Tela '{r}' em construção..."), expand=True)
         except Exception as ex:
             import traceback
@@ -144,7 +134,6 @@ def main(page: ft.Page):
             )
 
     def go(view: str, user=None, role=None, user_id=None):
-        # atualiza estado se fornecido
         if user is not None:
             state["user"] = user
         if role is not None:
@@ -152,70 +141,29 @@ def main(page: ft.Page):
         if user_id is not None:
             state["user_id"] = user_id
 
-        # trata logout: limpa estado e mostra login
         if view == "logout":
             state["user"] = None
             state["role"] = None
             state["user_id"] = None
             view = "login"
         
-        # define a rota actual e reconstrói o shell/content
         state["route"] = view
 
-        # limpa views e cria novamente o shell com route atual (assim o item activo é destacado)
         page.views.clear()
         try:
             page.views.append(build_shell(page, state, build_content))
         except Exception as ex:
-            # fallback minimal para mostrar erro na UI
             page.views.append(ft.View("/", controls=[ft.Text(f"Erro ao construir UI: {ex}")]))
+
         page.update()
 
-    # inicia com login se não houver user, ou com home se AUTO_LOGIN
     if os.environ.get("AUTO_LOGIN") == "1":
         go("home", user="admin", role="admin", user_id=1)
     else:
         go("login")
 
 
-def build(page: ft.Page):
-    # estado simples
-    state = {"user": None, "role": "aluno", "user_id": None, "route": "login"}
-
-    def view_for_route(route):
-        # devolve um control / Container para a rota atual
-        # ...existing code...
-        if route == "login":
-            return LoginView(page, on_login=on_login)
-        if route == "documentos":
-            return DocumentoView(page, user=state.get("user"), role=state.get("role"), user_id=state.get("user_id"))
-        if route == "comunicados":
-            return ComunicadoView(page, user=state.get("user"))
-        # default
-        return ft.Text("Rota não implementada")
-
-    def go(route, **kwargs):
-        state.update(kwargs)
-        state["route"] = route
-        # content_builder precisa ser callable que devolve o control da view central
-        content_builder = lambda: view_for_route(route)
-        shell = Shell(page,
-                      username=state.get("user") or "Usuário",
-                      role=state.get("role"),
-                      current_route=state.get("route"),
-                      on_route_change=go,
-                      content_builder=content_builder)
-        page.views.clear()
-        page.views.append(shell.build())
-        page.update()
-
-    # handler de login que define estado e navega
-    def on_login(user, role, user_id):
-        state["user"], state["role"], state["user_id"] = user, role, user_id
-        go("dashboard")
-
-    # inicía na rota guardada
-    go(state["route"])
 if __name__ == "__main__":
-    # inicia a app Flet (abre janela/browser)
-    ft.app(target=main)
+    port = int(os.environ.get("PORT", "8550"))
+    host = "0.0.0.0"
+    ft.app(target=main, view=ft.WEB_BROWSER, host=host, port=port)
