@@ -9,9 +9,7 @@ class Shell:
         self.current_route = current_route
         self.on_route_change = on_route_change
         self.content_builder = content_builder
-
         self._drawer_open = False
-        # reconstrói quando redimensiona para adaptar layout
         try:
             def _on_resize(e):
                 if callable(self.on_route_change):
@@ -27,22 +25,11 @@ class Shell:
 
     def _build_nav_items(self):
         controls = []
-        for route, label in menu_for_role(self.role):
-            controls.append(
-                ft.ListTile(
-                    title=ft.Text(label),
-                    on_click=lambda e, r=route: self._on_route_click(r),
-                    content_padding=ft.padding.symmetric(vertical=6, horizontal=8)
-                )
-            )
+        items = menu_for_role(self.role) or []
+        for route, label in items:
+            controls.append(ft.ListTile(title=ft.Text(label), on_click=lambda e, r=route: self._on_route_click(r)))
         controls.append(ft.Divider())
-        controls.append(
-            ft.ListTile(
-                title=ft.Text("Sair / Logout"),
-                on_click=lambda e: self._on_route_click("logout"),
-                content_padding=ft.padding.symmetric(vertical=6, horizontal=8)
-            )
-        )
+        controls.append(ft.ListTile(title=ft.Text("Sair / Logout"), on_click=lambda e: self._on_route_click("logout")))
         return controls
 
     def _get_width(self):
@@ -56,7 +43,6 @@ class Shell:
         return 1000
 
     def build(self):
-        # tenta construir o conteúdo central
         try:
             content_control = self.content_builder() if callable(self.content_builder) else self.content_builder
         except Exception as ex:
@@ -67,92 +53,36 @@ class Shell:
         tablet = 600 <= w < 900
         desktop = w >= 900
 
-        # login centra-se sempre
+        # Tela de login — centraliza
         if self.current_route == "login":
             max_w = 560 if desktop else (460 if tablet else 340)
-            centered = ft.Column(
-                [
-                    ft.Container(content=content_control, width=max_w)
-                ],
-                alignment="center",
-                horizontal_alignment="center",
-                expand=True,
-            )
+            centered = ft.Column([ft.Container(content=content_control, width=max_w)], alignment="center", horizontal_alignment="center", expand=True)
             return ft.View("/", controls=[centered])
 
-        # side nav container (para desktop/tablet)
         nav_items = self._build_nav_items()
-        nav_header = ft.Column(
-            [
-                ft.Row([ft.Icon(ft.Icons.SCHOOL, color=ft.colors.PRIMARY), ft.Text("Sistema Escolar", weight="bold")], alignment="start"),
-                ft.Text(f"Olá, {self.username}", size=12),
-                ft.Divider()
-            ],
-            tight=True
-        )
+        nav_header = ft.Column([ft.Row([ft.Icon(ft.Icons.SCHOOL, color=ft.colors.PRIMARY), ft.Text("Sistema Escolar", weight="bold")]), ft.Text(f"Olá, {self.username}", size=12), ft.Divider()], tight=True)
 
-        # Desktop: fixed sidebar + content
         if desktop:
-            sidebar = ft.Container(
-                content=ft.Column([nav_header] + nav_items, spacing=6),
-                width=260,
-                padding=12,
-                bgcolor=ft.colors.WHITE,
-                border_radius=0
-            )
+            sidebar = ft.Container(content=ft.Column([nav_header] + nav_items, spacing=6), width=260, padding=12)
             content_view = ft.Container(content=content_control, expand=True, padding=20)
-            view = ft.View(
-                "/",
-                controls=[
-                    ft.Row([sidebar, ft.VerticalDivider(width=1, thickness=1), content_view], expand=True)
-                ],
-            )
+            view = ft.View("/", controls=[ft.Row([sidebar, ft.VerticalDivider(width=1), content_view], expand=True)])
             return view
 
-        # Tablet: narrow sidebar + content (uses smaller sidebar)
         if tablet:
-            sidebar = ft.Container(
-                content=ft.Column([nav_header] + nav_items, spacing=6),
-                width=200,
-                padding=10,
-            )
+            sidebar = ft.Container(content=ft.Column([nav_header] + nav_items, spacing=6), width=200, padding=10)
             content_view = ft.Container(content=content_control, expand=True, padding=16)
-            view = ft.View(
-                "/",
-                controls=[
-                    ft.Row([sidebar, ft.VerticalDivider(width=1, thickness=1), content_view], expand=True)
-                ],
-            )
+            view = ft.View("/", controls=[ft.Row([sidebar, ft.VerticalDivider(width=1), content_view], expand=True)])
             return view
 
-        # Mobile: top AppBar + collapsible drawer (menu)
-        # AppBar
+        # Mobile
         def _toggle(e=None):
             self._drawer_open = not self._drawer_open
             if callable(self.on_route_change):
                 self.on_route_change(self.current_route)
-
         menu_btn = ft.IconButton(icon=ft.icons.MENU, on_click=_toggle)
         title = ft.Text("Sistema Escolar", weight="bold", size=16)
-
-        appbar = ft.Container(
-            content=ft.Row([menu_btn, title], alignment="start"),
-            padding=ft.padding.symmetric(horizontal=8, vertical=6),
-            bgcolor=ft.colors.WHITE
-        )
-
-        drawer = ft.Container(
-            content=ft.Column([nav_header] + nav_items, spacing=4),
-            visible=self._drawer_open,
-            padding=12,
-            bgcolor=ft.colors.WHITE
-        )
-
+        appbar = ft.Container(content=ft.Row([menu_btn, title], alignment="start"), padding=ft.padding.symmetric(horizontal=8, vertical=6))
+        drawer = ft.Container(content=ft.Column([nav_header] + nav_items, spacing=4), visible=self._drawer_open, padding=12)
         content_view = ft.Container(content=content_control, expand=True, padding=12)
-        view = ft.View(
-            "/",
-            controls=[
-                ft.Column([appbar, ft.Divider(), drawer, content_view], expand=True)
-            ],
-        )
+        view = ft.View("/", controls=[ft.Column([appbar, ft.Divider(), drawer, content_view], expand=True)])
         return view
