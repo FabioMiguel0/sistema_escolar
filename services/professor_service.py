@@ -33,6 +33,26 @@ def list_professores():
     conn.close()
     return [dict(r) for r in rows]
 
+def get_professor(id_):
+    ensure_table()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM professores WHERE id = ?", (id_,))
+    row = cur.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_all():
+    return list_professores()
+
+def update(id_, nome):
+    ensure_table()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("UPDATE professores SET nome = ? WHERE id = ?", (nome, id_))
+    conn.commit()
+    conn.close()
+
 def delete(id_):
     """Remove professor pelo id."""
     ensure_table()
@@ -60,12 +80,22 @@ class ProfessorService:
 
     def editar_professor(self, id_professor, **kwargs):
         for prof in self.professores:
-            if prof.id_professor == id_professor:
+            if getattr(prof, "id_professor", None) == id_professor:
                 for chave, valor in kwargs.items():
                     setattr(prof, chave, valor)
 
     def excluir_professor(self, id_professor):
-        self.professores = [p for p in self.professores if p.id_professor != id_professor]
+        self.professores = [p for p in self.professores if getattr(p, "id_professor", None) != id_professor]
 
     def listar_professores(self):
         return self.professores
+
+# aliases / compatibilidade com diferentes convenções de nomes
+get_all_professores = get_all
+list_all = list_professores
+all_professores = list_professores
+get_professor_by_id = get_professor
+get_by_id = get_professor
+create_professor = create
+update_professor = update
+delete_professor = delete

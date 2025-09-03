@@ -1,14 +1,45 @@
 import re
 import flet as ft
+from importlib import import_module
 
+# tenta carregar o módulo de serviço de forma resiliente
+_turma_mod = None
 try:
-    from services.turma_service import list_turmas, get_turma, create_turma, update_turma, delete_turma
+    _turma_mod = import_module("services.turma_service")
 except Exception:
-    from services.turma_service import get_all as list_turmas  # type: ignore
-    get_turma = lambda _id: None  # type: ignore
-    create_turma = lambda **kw: None  # type: ignore
-    update_turma = lambda _id, **kw: None  # type: ignore
-    delete_turma = lambda _id: None  # type: ignore
+    _turma_mod = None
+
+def _get_attr(names, default=None):
+    if _turma_mod is None:
+        return default
+    for n in names:
+        if hasattr(_turma_mod, n):
+            return getattr(_turma_mod, n)
+    return default
+
+# mapear nomes comuns usados pelas views
+list_turmas = _get_attr(["list_turmas", "get_all", "get_all_turmas", "list_all", "all_turmas"])
+get_turma = _get_attr(["get_turma", "get_by_id", "get_turma_by_id", "get"])
+create_turma = _get_attr(["create_turma", "create", "add_turma", "insert_turma"])
+update_turma = _get_attr(["update_turma", "update", "edit_turma", "modify_turma"])
+delete_turma = _get_attr(["delete_turma", "delete", "remove_turma"])
+
+# helpers que geram erro claro quando funções não existem
+def _missing(name):
+    def _f(*a, **k):
+        raise ImportError(f"services.turma_service não fornece '{name}'. Verifique services/turma_service.py ou adapte os nomes.")
+    return _f
+
+if list_turmas is None:
+    list_turmas = _missing("list_turmas / get_all / get_all_turmas")
+if get_turma is None:
+    get_turma = _missing("get_turma / get_by_id")
+if create_turma is None:
+    create_turma = _missing("create_turma / create")
+if update_turma is None:
+    update_turma = _missing("update_turma / update")
+if delete_turma is None:
+    delete_turma = _missing("delete_turma / delete")
 
 def TurmaView(page: ft.Page, role="admin", current_user_id=None, go=None):
     page.auto_scroll = True

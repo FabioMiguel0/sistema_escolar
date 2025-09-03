@@ -1,16 +1,45 @@
 import re
 import flet as ft
+from importlib import import_module
 
-# tenta vários nomes de serviço compatíveis
+# tenta carregar o módulo de serviço de forma resiliente
+_prof_mod = None
 try:
-    from services.professor_service import list_professores, get_professor, create_professor, update_professor, delete_professor
+    _prof_mod = import_module("services.professor_service")
 except Exception:
-    # fallback para compatibilidade com implementações variadas
-    from services.professor_service import get_all as list_professores  # type: ignore
-    get_professor = lambda _id: None  # type: ignore
-    create_professor = lambda **kw: None  # type: ignore
-    update_professor = lambda _id, **kw: None  # type: ignore
-    delete_professor = lambda _id: None  # type: ignore
+    _prof_mod = None
+
+def _get_attr(names, default=None):
+    if _prof_mod is None:
+        return default
+    for n in names:
+        if hasattr(_prof_mod, n):
+            return getattr(_prof_mod, n)
+    return default
+
+# mapear nomes comuns para as funções utilizadas pela view
+list_professores = _get_attr(["list_professores", "get_all", "get_all_professores", "list_all", "all_professores"])
+get_professor = _get_attr(["get_professor", "get_professor_by_id", "get_by_id", "get"])
+create_professor = _get_attr(["create_professor", "create", "add_professor", "insert_professor"])
+update_professor = _get_attr(["update_professor", "update", "edit_professor", "modify_professor"])
+delete_professor = _get_attr(["delete_professor", "delete", "remove_professor"])
+
+# se alguma função faltar, produzir erro claro ao chamar
+def _missing(name):
+    def _f(*a, **k):
+        raise ImportError(f"services.professor_service não fornece '{name}'. Verifique services/professor_service.py ou adapte os nomes.")
+    return _f
+
+if list_professores is None:
+    list_professores = _missing("list_professores / get_all / get_all_professores")
+if get_professor is None:
+    get_professor = _missing("get_professor / get_by_id")
+if create_professor is None:
+    create_professor = _missing("create_professor / create")
+if update_professor is None:
+    update_professor = _missing("update_professor / update")
+if delete_professor is None:
+    delete_professor = _missing("delete_professor / delete")
 
 NAME_RE = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ\s'\-]+$")
 
